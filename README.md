@@ -18,6 +18,31 @@ or:
 ```
 -i {AccessId} -k {AccessKey} -m {MainDomain} -s {SubDomainName} -c {CheckUpdateInterval}
 
+## Config
+
+```yaml
+accessid: '*AccessId'
+accesskey: '*AccessKey'
+maindomain: '*example.com'
+subdomainname: '*www'
+checkupdateinterval: 30
+protocol: all
+ipv4apiurl: ""
+ipv6apiurl: ""
+ipv4interfacename: ""
+ipv6interfacename: ""
+```
+
+`ipv4interfacename` and `ipv6interfacename` can be configured separately.
+When an interface name is set, aliddns reads the IP from the local network
+interface first instead of querying the configured API URL. For example:
+
+```yaml
+protocol: all
+ipv4interfacename: eth0
+ipv6interfacename: eth1
+```
+
 You can install the pre-compiled binary (in several different ways),
 use Docker.
 
@@ -94,4 +119,3 @@ $ docker run openiothub/aliddns:latest run -i myid -k mykey -m iothub.cloud -s w
 Note that the image will almost always have the last stable Go version.
 
 [releases]: https://github.com/OpenIoTHub/aliddns/releases
-

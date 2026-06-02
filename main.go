@@ -113,6 +113,20 @@ func main() {
 					EnvVars:     []string{"Ipv6ApiUrl"},
 					Destination: &config.ConfigModel.Ipv6ApiUrl,
 				},
+				&cli.StringFlag{
+					Name:        "ipv4InterfaceName",
+					Value:       config.ConfigModel.Ipv4InterfaceName,
+					Usage:       "Ipv4InterfaceName",
+					EnvVars:     []string{"Ipv4InterfaceName"},
+					Destination: &config.ConfigModel.Ipv4InterfaceName,
+				},
+				&cli.StringFlag{
+					Name:        "ipv6InterfaceName",
+					Value:       config.ConfigModel.Ipv6InterfaceName,
+					Usage:       "Ipv6InterfaceName",
+					EnvVars:     []string{"Ipv6InterfaceName"},
+					Destination: &config.ConfigModel.Ipv6InterfaceName,
+				},
 			},
 			Action: func(c *cli.Context) error {
 				return timerFunction()
@@ -219,7 +233,7 @@ func update() {
 	//}
 
 	// 如果没有相应记录，又想要更新，那就新建一个
-	if !ipv4Finded && (protocol == "ipv4" || protocol == "all") {
+	if !ipv4Finded && publicIpv4 != "" && (protocol == "ipv4" || protocol == "all") {
 		var sub = &alidns.Record{
 			DomainName: config.ConfigModel.MainDomain,
 			RR:         config.ConfigModel.SubDomainName,
@@ -230,7 +244,7 @@ func update() {
 		log.Println("未找到 IPv4 记录，现尝试创建一个")
 		_ = utils.AddSubDomainRecord(sub)
 	}
-	if !ipv6Finded && (protocol == "ipv6" || protocol == "all") {
+	if !ipv6Finded && publicIpv6 != "" && (protocol == "ipv6" || protocol == "all") {
 		var sub = &alidns.Record{
 			DomainName: config.ConfigModel.MainDomain,
 			RR:         config.ConfigModel.SubDomainName,

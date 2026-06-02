@@ -22,6 +22,8 @@ var ConfigModel = &models.ConfigModel{
 	Protocol:            "all",
 	Ipv4ApiUrl:          "",
 	Ipv6ApiUrl:          "",
+	Ipv4InterfaceName:   "",
+	Ipv6InterfaceName:   "",
 }
 
 // 将配置写入指定的路径的文件
@@ -70,6 +72,7 @@ func UseConfigFile() {
 	protocol := strings.ToLower(ConfigModel.Protocol)
 	for _, val := range SupportedProtocols {
 		if val == protocol {
+			ConfigModel.Protocol = protocol
 			return
 		}
 	}

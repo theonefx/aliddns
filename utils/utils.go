@@ -1,15 +1,16 @@
 package utils
 
 import (
-	"github.com/OpenIoTHub/aliddns/config"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/alidns"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
-	"regexp"
 	"strings"
+
+	"github.com/OpenIoTHub/aliddns/config"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/alidns"
 )
 
 //u4="http://ipv4.ident.me http://ipv4.icanhazip.com http://nsupdate.info/myip http://whatismyip.akamai.com http://ipv4.myip.dk/api/info/IPv4Address http://checkip4.spdyn.de http://v4.ipv6-test.com/api/myip.php http://checkip.amazonaws.com http://ipinfo.io/ip http://bot.whatismyipaddress.com http://ipv4.ident.me http://ipv4.icanhazip.com http://nsupdate.info/myip http://whatismyip.akamai.com http://ipv4.myip.dk/api/info/IPv4Address http://checkip4.spdyn.de http://v4.ipv6-test.com/api/myip.php http://checkip.amazonaws.com http://ipinfo.io/ip http://bot.whatismyipaddress.com"
@@ -44,10 +45,21 @@ var Ipv6APIUrls = []string{
 }
 
 func GetMyPublicIpv4() string {
-	if config.ConfigModel.Ipv4ApiUrl != "" {
-		Ipv4APIUrls = append([]string{config.ConfigModel.Ipv4ApiUrl}, Ipv4APIUrls...)
+	interfaceName := strings.TrimSpace(config.ConfigModel.Ipv4InterfaceName)
+	if interfaceName != "" {
+		ipv4, err := GetIPByInterface(interfaceName, "ipv4")
+		if err != nil {
+			log.Printf("get ipv4 from interface err：%s", err)
+			return ""
+		}
+		log.Printf("got ipv4 addr from interface %s: %s", interfaceName, ipv4)
+		return ipv4
 	}
-	for _, url := range Ipv4APIUrls {
+	urls := Ipv4APIUrls
+	if apiURL := strings.TrimSpace(config.ConfigModel.Ipv4ApiUrl); apiURL != "" {
+		urls = append([]string{apiURL}, Ipv4APIUrls...)
+	}
+	for _, url := range urls {
 		resp, err := http.Get(url)
 		if err != nil {
 			log.Printf("get public ipv4 err：%s", err)
@@ -59,22 +71,34 @@ func GetMyPublicIpv4() string {
 			_ = resp.Body.Close()
 			continue
 		}
-		ipv4 := strings.Replace(string(bytes), "\n", "", -1)
+		ipv4 := strings.TrimSpace(string(bytes))
 		ip := net.ParseIP(ipv4)
 		if ip != nil {
 			log.Println("got ipv4 addr:", ip.String())
 			_ = resp.Body.Close()
 			return ip.String()
 		}
+		_ = resp.Body.Close()
 	}
 	return ""
 }
 
 func GetMyPublicIpv6() string {
-	if config.ConfigModel.Ipv6ApiUrl != "" {
-		Ipv6APIUrls = append([]string{config.ConfigModel.Ipv6ApiUrl}, Ipv6APIUrls...)
+	interfaceName := strings.TrimSpace(config.ConfigModel.Ipv6InterfaceName)
+	if interfaceName != "" {
+		ipv6, err := GetIPByInterface(interfaceName, "ipv6")
+		if err != nil {
+			log.Printf("get ipv6 from interface err：%s", err)
+			return ""
+		}
+		log.Printf("got ipv6 addr from interface %s: %s", interfaceName, ipv6)
+		return ipv6
 	}
-	for _, url := range Ipv6APIUrls {
+	urls := Ipv6APIUrls
+	if apiURL := strings.TrimSpace(config.ConfigModel.Ipv6ApiUrl); apiURL != "" {
+		urls = append([]string{apiURL}, Ipv6APIUrls...)
+	}
+	for _, url := range urls {
 		resp, err := http.Get(url)
 		if err != nil {
 			log.Printf("get public ipv6 err：%s", err)
@@ -90,30 +114,70 @@ func GetMyPublicIpv6() string {
 		// 删除 document.write(xxx) (如有)
 		tmp := strings.Replace(string(bytes), "document.write('", "", -1)
 		tmp = strings.Replace(tmp, "');", "", -1)
-		ipv6 := strings.Replace(tmp, "\n", "", -1)
+		ipv6 := strings.TrimSpace(tmp)
 		ip := net.ParseIP(ipv6)
 		if ip != nil {
 			log.Println("got ipv6 addr:", ip.String())
 			_ = resp.Body.Close()
 			return ip.String()
 		}
+		_ = resp.Body.Close()
 	}
 	return ""
 }
 
-// GetMyIPV6ByLocal TODO Test
-func GetMyIPV6ByLocal() string {
-	s, err := net.InterfaceAddrs()
+func GetIPByInterface(interfaceName, protocol string) (string, error) {
+	networkInterface, err := net.InterfaceByName(strings.TrimSpace(interfaceName))
 	if err != nil {
-		return ""
+		return "", err
 	}
-	for _, a := range s {
-		i := regexp.MustCompile(`(\w+:){7}\w+`).FindString(a.String())
-		if strings.Count(i, ":") == 7 {
-			return i
+	if networkInterface.Flags&net.FlagUp == 0 {
+		return "", fmt.Errorf("network interface %q is down", networkInterface.Name)
+	}
+	addrs, err := networkInterface.Addrs()
+	if err != nil {
+		return "", err
+	}
+	for _, addr := range addrs {
+		ip := getIPFromInterfaceAddr(addr)
+		if ip == nil || !isUsableInterfaceIP(ip) {
+			continue
+		}
+		switch protocol {
+		case "ipv4":
+			ipv4 := ip.To4()
+			if ipv4 != nil {
+				return ipv4.String(), nil
+			}
+		case "ipv6":
+			if ip.To4() == nil && ip.To16() != nil {
+				return ip.String(), nil
+			}
+		default:
+			return "", fmt.Errorf("unsupported protocol %q", protocol)
 		}
 	}
-	return ""
+	return "", fmt.Errorf("no usable %s address found on interface %q", protocol, networkInterface.Name)
+}
+
+func getIPFromInterfaceAddr(addr net.Addr) net.IP {
+	switch v := addr.(type) {
+	case *net.IPAddr:
+		return v.IP
+	case *net.IPNet:
+		return v.IP
+	default:
+		return nil
+	}
+}
+
+func isUsableInterfaceIP(ip net.IP) bool {
+	return ip.IsGlobalUnicast() &&
+		!ip.IsLoopback() &&
+		!ip.IsLinkLocalUnicast() &&
+		!ip.IsLinkLocalMulticast() &&
+		!ip.IsMulticast() &&
+		!ip.IsUnspecified()
 }
 
 func GetSubDomains(mainDomian string) (*alidns.DescribeDomainRecordsResponse, error) {

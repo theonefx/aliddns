@@ -9,4 +9,6 @@ type ConfigModel struct {
 	Protocol            string // "ipv4"或"ipv6"或"all"，默认"all"
 	Ipv4ApiUrl          string // 获取 IPv4 的 API 地址
 	Ipv6ApiUrl          string // 获取 IPv6 的 API 地址
+	Ipv4InterfaceName   string // 获取 IPv4 的网卡名称，设置后优先从本机网卡获取
+	Ipv6InterfaceName   string // 获取 IPv6 的网卡名称，设置后优先从本机网卡获取
 }
